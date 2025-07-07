@@ -1,38 +1,38 @@
 from pathlib import Path
-import sys
 
 
 def get_files_info(working_directory, directory=None):
     try:
-        path_working_directory = Path(working_directory)
-        if directory != None:
-            path_directory = Path(directory)
-            full_path = Path(f"{working_directory}/{directory}/")
-            list_content_workingDir = list(path_working_directory.glob("*"))
-            list_item_workingDir = [content.name for content in list_content_workingDir]
-            list_content_fullPath = list(full_path.glob("*"))
+        path_working_directory = Path(working_directory).resolve()
+        if directory is None:
+            target_path = path_working_directory
+        else:
+            target_path = (path_working_directory / directory).resolve()
 
-            if directory == "." or directory == "":
-                list_item_workingDir.append(directory)
+        list_content_target_path = list(target_path.glob("*"))
 
-            if directory not in list_item_workingDir:
-                    print(f'Error: Cannot list "{directory}"'
-                    ' as it is outside the permitted working directory')
-                    sys.exit(0)
-            elif not full_path.is_dir():
-                print(f'Error: "{directory}" is not a directory')
+        try:
+            target_path.relative_to(path_working_directory)
+        except ValueError:
+            return(f'Error: Cannot list "{directory}"'
+                ' as it is outside the permitted working directory')
+        
+        if not target_path.is_dir():
+            return(f'Error: "{directory}" is not a directory')
+        else:
+            lines = []
+            for content in list_content_target_path:
+                file_size = content.stat().st_size
+                is_dir = content.is_dir()
+                lines.append(f"- {content.name}: file_size={file_size} bytes, is_dir={is_dir}")
+            description = "\n".join(lines)
+            
+            if directory is None or directory == ".":
+                header = "Result for current directory:"
             else:
-                if path_directory.name != "":
-                    print(f"Result for '{directory}' directory:")
-                else:
-                    print("Result for current directory:")
-                for content in list_content_fullPath:
-                    file_size = content.stat().st_size
-                    if content.is_dir():
-                        print(f"- {content.name}: file_size={file_size} bytes, is_dir=True")
-                    else:
-                        print(f"- {content.name}: file_size={file_size} bytes, is_dir=False")
+                header = f"Result for {directory} directory:"
+            return f"{header}\n{description}"
+
 
     except Exception as e:
-        print(f"Error: {e}")
-
+        return(f"Error: {e}")
