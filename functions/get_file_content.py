@@ -1,5 +1,6 @@
 from pathlib import Path
 from functions.config import CHAR_LIMIT
+from google.genai import types
 
 
 def get_file_content(working_directory, file_path):
@@ -29,3 +30,18 @@ def get_file_content(working_directory, file_path):
 			
 	except Exception as e:
 		return(f"Error: {e}")
+
+
+schema_get_file_content = types.FunctionDeclaration(
+	name="get_file_content",
+	description="Get the contents of a file in the specified directory, constrained to the working directory.",
+	parameters=types.Schema(
+		type=types.Type.OBJECT,
+		properties={
+			"file_path": types.Schema(
+				type=types.Type.STRING,
+				description="The file path to get the contents from, relative to the working directory."
+			),
+		},
+	),
+)
