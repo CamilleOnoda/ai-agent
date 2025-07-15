@@ -2,10 +2,11 @@ import os, sys
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-from functions.get_files_info import schema_get_files_info
-from functions.get_file_content import schema_get_file_content
-from functions.run_python import schema_run_python_file
-from functions.write_file import schema_write_file
+from functions import get_file_content
+from functions.get_files_info import schema_get_files_info, get_files_info
+from functions.get_file_content import schema_get_file_content, get_file_content
+from functions.run_python import schema_run_python_file, run_python_file
+from functions.write_file import schema_write_file, write_file
 
 
 def main():
@@ -45,6 +46,45 @@ All paths you provide should be relative to the working directory. You do not ne
     generate_content(user_prompt, messages, client, system_prompt, available_functions)
 
 
+def call_function(function_call, verbose=False):
+    if verbose:
+        print(f"Calling function: {function_call.name}({function_call.args})")
+    else:
+        print(f" - Calling function: {function_call.name}")
+
+    args = function_call.args.copy()
+    args["working_directory"] = "./calculator"
+    function_dic = {
+        "get_files_info":get_files_info,
+        "get_file_content": get_file_content,
+        "run_python_file": run_python_file,
+        "write_file": write_file,
+    }
+
+    result = function_dic[function_call.name](**args)
+
+    if not function_call.name in function_dic:
+        return types.Content(
+            role="tool",
+            parts=[
+                types.Part.from_function_response(
+                    name=function_call.name,
+                    response={"error": f"Unknown function: {function_call.name}"},
+                    )
+                ],
+            )
+    else:
+        return types.Content(
+            role="tool",
+            parts=[
+                types.Part.from_function_response(
+                    name=function_call.name,
+                    response={"result": result},
+                    )
+                ],
+            )
+
+
 def generate_content(user_prompt, messages, client, system_prompt, available_functions):
     response = client.models.generate_content(
         model="gemini-2.0-flash-001",
@@ -55,16 +95,20 @@ def generate_content(user_prompt, messages, client, system_prompt, available_fun
         )
     prompt_tokens = response.usage_metadata.prompt_token_count
     response_tokens = response.usage_metadata.candidates_token_count
-    flag = "--verbose"
+    verbose = "--verbose"
     
     if response.function_calls:
         for function_call in response.function_calls:
-            print(f"Calling function: {function_call.name}{function_call.args}")       
+            if len(sys.argv) > 2 and sys.argv[2] == verbose:
+                result = call_function(function_call, verbose)
+            else:
+                result = call_function(function_call)
+            print(f"-> {result.parts[0].function_response.response}")
     else:
         print(f"Response :")
         print(f"{response.text}")
 
-    if len(sys.argv) > 2 and sys.argv[2] == flag:
+    if len(sys.argv) > 2 and sys.argv[2] == verbose:
         print(f"User prompt: {user_prompt}")
         print(f"Prompt tokens: {prompt_tokens}")
         print(f"Response tokens: {response_tokens}")
