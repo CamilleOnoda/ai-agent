@@ -8,6 +8,8 @@ from functions.get_file_content import schema_get_file_content, get_file_content
 from functions.run_python import schema_run_python_file, run_python_file
 from functions.write_file import schema_write_file, write_file
 
+FLAG = "--verbose"
+
 
 def main():
     load_dotenv()
@@ -43,8 +45,34 @@ All paths you provide should be relative to the working directory. You do not ne
         ]
     )
 
-    generate_content(user_prompt, messages, client, system_prompt, available_functions)
+    for i in range(21):
+        try:
+            response = generate_content(user_prompt, messages, client, system_prompt, available_functions)
+            if not response.function_calls:
+                print("Final response:")
+                print(response.text)
+                break
 
+            # If no final text response: the model wants to call tools
+            for candidate in response.candidates:
+                # Add model's turn which contains the function call
+                messages.append(candidate.content)
+
+                # Iterate through the parts of candidate's content
+                # to find a function_call and execute
+                for part in candidate.content.parts:
+                    if part.function_call:
+                        function_call_object = part.function_call
+                        if len(sys.argv) > 2 and sys.argv[2] == FLAG:
+                            tool_response_message = call_function(function_call_object, FLAG)
+                        else:
+                            tool_response_message = call_function(function_call_object)
+
+                        messages.append(tool_response_message)
+
+        except Exception as e:
+            print(f"error: {e}")
+  
 
 def call_function(function_call, verbose=False):
     if verbose:
@@ -95,23 +123,13 @@ def generate_content(user_prompt, messages, client, system_prompt, available_fun
         )
     prompt_tokens = response.usage_metadata.prompt_token_count
     response_tokens = response.usage_metadata.candidates_token_count
-    verbose = "--verbose"
     
-    if response.function_calls:
-        for function_call in response.function_calls:
-            if len(sys.argv) > 2 and sys.argv[2] == verbose:
-                result = call_function(function_call, verbose)
-            else:
-                result = call_function(function_call)
-            print(f"-> {result.parts[0].function_response.response}")
-    else:
-        print(f"Response :")
-        print(f"{response.text}")
-
-    if len(sys.argv) > 2 and sys.argv[2] == verbose:
+    if len(sys.argv) > 2 and sys.argv[2] == FLAG:
         print(f"User prompt: {user_prompt}")
         print(f"Prompt tokens: {prompt_tokens}")
         print(f"Response tokens: {response_tokens}")
+
+    return response
 
 
 if __name__ == "__main__":
